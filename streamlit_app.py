@@ -98,7 +98,6 @@ with tab1:
                                         "type": "text", 
                                         "text": """Elemezd a számlát. 
                                         FONTOS: A 'partner' mezőbe a SZÁMLA KIÁLLÍTÓJÁT (eladó/szolgáltató) írd! 
-                                        NE a vevőt (aki Te vagy) írd be partnernek. 
                                         JSON mezők: partner, datum, hatarido, bizonylatszam, bankszamla, osszeg, fizetesi_mod."""
                                     },
                                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
@@ -166,3 +165,4 @@ with tab3:
     otp_csv = st.file_uploader("OTP Banki CSV feltöltése", type="csv")
     if st.button("Párosítás indítása") and otp_csv:
         st.warning("A funkció élesítése folyamatban...")
+
