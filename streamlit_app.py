@@ -12,12 +12,12 @@ import io
 st.set_page_config(page_title="SzámlaMester AI", layout="wide")
 
 # --- STÍLUS ÉS DESIGN ---
-st.markdown("""
+ st.markdown("""
     <style>
     .main { background-color: #f4f7f6; }
     .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #2c3e50; color: white; }
     </style>
-    """, unsafe_allow_html=True) # Így a helyes!, unsafe_allow_name=True)
+    """, unsafe_allow_html=True) """, unsafe_allow_html=True) # Így a helyes!, unsafe_allow_name=True)
 
 # --- JELSZÓ VÉDELEM ---
 def check_password():
@@ -150,3 +150,4 @@ with tab3:
         # Itt ugyanaz az OTP logika futna le
 
         st.info("Ez a funkció a feltöltött adatokon fut le.")
+
