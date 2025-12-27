@@ -17,7 +17,7 @@ st.markdown("""
     .main { background-color: #f4f7f6; }
     .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #2c3e50; color: white; }
     </style>
-    """, unsafe_allow_name=True)
+    """, unsafe_allow_html=True) # Így a helyes!, unsafe_allow_name=True)
 
 # --- JELSZÓ VÉDELEM ---
 def check_password():
@@ -148,4 +148,5 @@ with tab3:
     otp_file = st.file_uploader("Válaszd ki az OTP CSV fájlt", type="csv")
     if st.button("Egyeztetés indítása") and otp_file:
         # Itt ugyanaz az OTP logika futna le
+
         st.info("Ez a funkció a feltöltött adatokon fut le.")
