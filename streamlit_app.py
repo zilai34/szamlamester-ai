@@ -80,15 +80,22 @@ with tab1:
                         base64_image = encode_image(img_bytes)
 
                         response = client.chat.completions.create(
-                            model="gpt-4o",
-                            messages=[{
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": "JSON formátumban add meg: partner, datum, hatarido, bizonylatszam, bankszamla, osszeg, fizetesi_mod."},
-                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                                ]
-                            }],
-                            response_format={ "type": "json_object" }
+    model="gpt-4o",
+    messages=[{
+        "role": "user",
+        "content": [
+            {
+                "type": "text", 
+                "text": """Elemezd a számlát és adj vissza JSON-t. 
+                FONTOS: A 'partner' mezőbe a SZÁMLA KIÁLLÍTÓJÁT (eladó/szolgáltató) írd, 
+                NE a vevőt! 
+                Mezők: partner, datum, hatarido, bizonylatszam, bankszamla, osszeg, fizetesi_mod."""
+            },
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+        ]
+    }],
+    response_format={ "type": "json_object" }
+)
                         )
                         
                         adat = json.loads(response.choices[0].message.content)
@@ -140,4 +147,5 @@ with tab3:
     otp_file = st.file_uploader("OTP CSV fájl", type="csv")
     if st.button("Párosítás") and otp_file:
         st.warning("Ez a funkció fejlesztés alatt áll a felhős verzióban.")
+
 
