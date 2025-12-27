@@ -121,7 +121,7 @@ with tab2:
     if st.session_state.db.empty:
         st.write("Nincs rögzített adat.")
     else:
-        st.dataframe(st.session_state.db, use_container_width=True)
+        st.dataframe(st.session_state.db, use_container_width=True, hide_index=True)
         
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -140,3 +140,4 @@ with tab3:
     otp_file = st.file_uploader("OTP CSV fájl", type="csv")
     if st.button("Párosítás") and otp_file:
         st.warning("Ez a funkció fejlesztés alatt áll a felhős verzióban.")
+
