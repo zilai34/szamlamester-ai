@@ -9,7 +9,16 @@ import fitz  # PyMuPDF
 import io
 
 # --- OLDAL BEÁLLÍTÁSA ---
-st.set_page_config(page_title="SzámlaMester AI", layout="wide")
+st.set_page_config(page_title="SzámlaMester AI v1.3", layout="wide")
+
+# --- DESIGN ---
+st.markdown("""
+    <style>
+    .main { background-color: #f4f7f6; }
+    .stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #2c3e50; color: white; }
+    .stDataFrame { border-radius: 10px; overflow: hidden; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # --- JELSZÓ VÉDELEM ---
 def check_password():
@@ -21,23 +30,23 @@ def check_password():
             st.session_state["password_correct"] = False
 
     if "password_correct" not in st.session_state:
-        st.text_input("Jelszó", type="password", on_change=password_entered, key="password")
+        st.text_input("Jelszó a belépéshez", type="password", on_change=password_entered, key="password")
         if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-            st.error("Helytelen jelszó!")
+            st.error("Helytelen jelszó! Próbáld újra.")
         return False
     return st.session_state["password_correct"]
 
 if not check_password():
     st.stop()
 
-# --- API KULCS BEOLVASÁSA ---
+# --- API KULCS ---
 if "OPENAI_API_KEY" in st.secrets:
     client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 else:
-    st.error("Hiba: Az OPENAI_API_KEY hiányzik a Secrets-ből!")
+    st.error("HIBA: Az OPENAI_API_KEY nincs beállítva a Streamlit Secrets-ben!")
     st.stop()
 
-# --- ADATBÁZIS INICIALIZÁLÁS ---
+# --- ADATBÁZIS (SESSION) ---
 if 'db' not in st.session_state:
     st.session_state.db = pd.DataFrame(columns=[
         'Saját Cég', 'Partner', 'Dátum', 'Határidő', 'Bizonylatszám', 'Bankszámla', 'Összeg', 'Fizetési mód', 'Státusz'
@@ -57,95 +66,103 @@ def encode_image(image_bytes):
 
 # --- FELÜLET ---
 st.title("🚀 SzámlaMester AI v1.3")
-st.info("Tipp: Ha frissíted az oldalt (F5), az adatok elvesznek. Használd az Excel letöltést mentéshez!")
+st.caption("Használd a mobilodról is a számlák gyors beolvasásához!")
 
 tab1, tab2, tab3 = st.tabs(["📤 Beolvasás", "📋 Napló & Excel", "🏦 OTP Egyeztetés"])
 
 with tab1:
     col1, col2 = st.columns([1, 2])
     with col1:
-        ceg = st.selectbox("Melyik cég nevére rögzítsünk?", ["Tornyos Pékség Kft.", "DJ & K BT."])
-        uploaded_files = st.file_uploader("Számlák feltöltése (PDF vagy Kép)", accept_multiple_files=True)
+        sajat_ceg = st.selectbox("Melyik cég nevére rögzítsünk?", ["Tornyos Pékség Kft.", "DJ & K BT."])
+        uploaded_files = st.file_uploader("Számlák feltöltése", accept_multiple_files=True, type=['png', 'jpg', 'jpeg', 'pdf'])
         
         if st.button("Feldolgozás indítása") and uploaded_files:
             for uploaded_file in uploaded_files:
-                with st.spinner(f"Feldolgozás: {uploaded_file.name}..."):
+                with st.spinner(f"Elemzés: {uploaded_file.name}..."):
                     try:
-                        file_bytes = uploaded_file.read()
+                        file_data = uploaded_file.read()
                         if uploaded_file.name.lower().endswith('.pdf'):
-                            img_bytes = process_pdf_to_image(file_bytes)
+                            img_payload = process_pdf_to_image(file_data)
                         else:
-                            img_bytes = file_bytes
+                            img_payload = file_data
                         
-                        base64_image = encode_image(img_bytes)
+                        b64_img = encode_image(img_payload)
 
+                        # PONTOSÍTOTT AI UTASÍTÁS
                         response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{
-        "role": "user",
-        "content": [
-            {
-                "type": "text", 
-                "text": """Elemezd a számlát és adj vissza JSON-t. 
-                FONTOS: A 'partner' mezőbe a SZÁMLA KIÁLLÍTÓJÁT (eladó/szolgáltató) írd, 
-                NE a vevőt! 
-                Mezők: partner, datum, hatarido, bizonylatszam, bankszamla, osszeg, fizetesi_mod."""
-            },
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-        ]
-    }],
-    response_format={ "type": "json_object" }
-)
+                            model="gpt-4o",
+                            messages=[{
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "text", 
+                                        "text": """Elemezd a számlát. 
+                                        FONTOS: A 'partner' mezőbe a SZÁMLA KIÁLLÍTÓJÁT (eladó/szolgáltató) írd! 
+                                        NE a vevőt (aki Te vagy) írd be partnernek. 
+                                        JSON mezők: partner, datum, hatarido, bizonylatszam, bankszamla, osszeg, fizetesi_mod."""
+                                    },
+                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_img}"}}
+                                ]
+                            }],
+                            response_format={ "type": "json_object" }
                         )
                         
-                        adat = json.loads(response.choices[0].message.content)
+                        res_json = json.loads(response.choices[0].message.content)
                         
-                        raw_amount = str(adat.get('osszeg', 0)).replace(' ', '').replace('Ft', '').replace(',', '.')
+                        # Összeg tisztítása
+                        raw_val = str(res_json.get('osszeg', 0)).replace(' ', '').replace('Ft', '').replace(',', '.')
                         try:
-                            clean_amount = int(round(float(raw_amount)))
+                            final_amt = int(round(float(raw_val)))
                         except:
-                            clean_amount = 0
+                            final_amt = 0
 
-                        uj_sor = {
-                            'Saját Cég': ceg,
-                            'Partner': adat.get('partner', 'Ismeretlen'),
-                            'Dátum': adat.get('datum', ''),
-                            'Határidő': adat.get('hatarido', adat.get('datum', '')),
-                            'Bizonylatszám': adat.get('bizonylatszam', '-'),
-                            'Bankszámla': adat.get('bankszamla', '-'),
-                            'Összeg': clean_amount,
-                            'Fizetési mód': adat.get('fizetesi_mod', 'Átutalás'),
-                            'Státusz': 'Nyitott' if 'átutalás' in str(adat.get('fizetesi_mod','')).lower() else 'Kifizetve'
+                        uj_adat = {
+                            'Saját Cég': sajat_ceg,
+                            'Partner': res_json.get('partner', 'Ismeretlen'),
+                            'Dátum': res_json.get('datum', ''),
+                            'Határidő': res_json.get('hatarido', res_json.get('datum', '')),
+                            'Bizonylatszám': res_json.get('bizonylatszam', '-'),
+                            'Bankszámla': res_json.get('bankszamla', '-'),
+                            'Összeg': final_amt,
+                            'Fizetési mód': res_json.get('fizetesi_mod', 'Átutalás'),
+                            'Státusz': 'Nyitott' if 'átutalás' in str(res_json.get('fizetesi_mod','')).lower() else 'Kifizetve'
                         }
                         
-                        st.session_state.db = pd.concat([st.session_state.db, pd.DataFrame([uj_sor])], ignore_index=True)
+                        st.session_state.db = pd.concat([st.session_state.db, pd.DataFrame([uj_adat])], ignore_index=True)
                     except Exception as e:
-                        st.error(f"Hiba a(z) {uploaded_file.name} feldolgozásakor: {e}")
-
-            st.success("Kész!")
+                        st.error(f"Hiba a fájlnál: {uploaded_file.name} -> {e}")
+            st.success("Feldolgozás kész!")
 
 with tab2:
     if st.session_state.db.empty:
-        st.write("Nincs rögzített adat.")
+        st.info("A napló még üres. Tölts fel számlákat a 'Beolvasás' fülön!")
     else:
-        st.dataframe(st.session_state.db, use_container_width=True, hide_index=True)
+        # TÖRLÉS FUNKCIÓ
+        with st.expander("🗑️ Sor törlése"):
+            row_to_delete = st.number_input("Törlendő sor sorszáma (bal oldali szám):", min_value=0, max_value=len(st.session_state.db)-1, step=1)
+            if st.button("Kiválasztott sor végleges törlése"):
+                st.session_state.db = st.session_state.db.drop(st.session_state.db.index[row_to_delete]).reset_index(drop=True)
+                st.rerun()
+
+        st.subheader("Rögzített tételek")
+        # Oszlopszélesség javítva
+        st.dataframe(st.session_state.db, use_container_width=True, hide_index=False)
         
+        # EXCEL EXPORT
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             st.session_state.db.to_excel(writer, index=False, sheet_name='Szamlak')
         
         st.download_button(
-            label="📊 Excel letöltése",
+            label="📊 Összesítő Excel letöltése",
             data=output.getvalue(),
-            file_name="szamlak_export.xlsx",
+            file_name="szamlamester_export.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
 with tab3:
-    st.subheader("OTP Kivonat összehasonlítás")
-    st.write("Töltsd fel a CSV-t az egyeztetéshez.")
-    otp_file = st.file_uploader("OTP CSV fájl", type="csv")
-    if st.button("Párosítás") and otp_file:
-        st.warning("Ez a funkció fejlesztés alatt áll a felhős verzióban.")
-
-
+    st.subheader("Banki egyeztetés")
+    st.write("Ez a funkció összeveti a banki CSV-t a fenti listával.")
+    otp_csv = st.file_uploader("OTP Banki CSV feltöltése", type="csv")
+    if st.button("Párosítás indítása") and otp_csv:
+        st.warning("A funkció élesítése folyamatban...")
